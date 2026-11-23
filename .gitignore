@@ -1,0 +1,20 @@
+# Python 虚拟环境与缓存
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# 本机隐私数据与数据库（严禁提交）
+data/
+*.db
+*.sqlite
+*.sqlite3
+queue.jsonl
+profile_compact.md
+
+# 开发期临时产物
+_dev/
+.env

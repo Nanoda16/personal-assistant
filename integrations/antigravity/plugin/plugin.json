@@ -1,0 +1,14 @@
+{
+  "name": "personal-assistant",
+  "displayName": "Personal Assistant",
+  "version": "0.1.0",
+  "description": "本地优先、可自我迭代的个人记忆与用户画像助理，跨会话洞察习惯、技能与目标，提供贴合个人的建议。",
+  "logo": "assets/logo.svg",
+  "author": "Nanoda16",
+  "repository": "https://github.com/Nanoda16/personal-assistant",
+  "suggestedPrompts": [
+    "基于你对我的了解，我下一步该优先做什么？",
+    "导入我最近的会话并更新我的用户画像",
+    "分析我在哪些技能上还有短板，给出提升建议"
+  ]
+}

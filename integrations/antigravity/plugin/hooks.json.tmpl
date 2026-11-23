@@ -1,0 +1,18 @@
+{
+  "personal-assistant-memory": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "\"__PYTHON__\" -m personal_assistant.hooks session-start --pa-home \"__PA_HOME__\"",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "\"__PYTHON__\" -m personal_assistant.hooks stop --pa-home \"__PA_HOME__\"",
+        "timeout": 10
+      }
+    ]
+  }
+}
