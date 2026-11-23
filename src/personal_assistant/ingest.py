@@ -12,8 +12,10 @@ from personal_assistant.extractor import EXTRACTION_PROMPT, ApiExtractor, parse_
 from personal_assistant.sources import (
     RawConversation,
     discover_antigravity_transcripts,
+    find_gemini_takeout_file,
     parse_antigravity_transcript,
     parse_chatgpt_export,
+    parse_gemini_takeout,
     parse_text_file,
 )
 from personal_assistant.sources.antigravity import inspect_antigravity_transcript
@@ -143,6 +145,15 @@ def _load_conv_for_row(row: Any) -> RawConversation | None:
     if source == "chatgpt":
         file_part, _, idx_part = path_str.partition("#")
         convs = parse_chatgpt_export(Path(file_part))
+        for c in convs:
+            if c.ref == ref:
+                return c
+        if idx_part.isdigit() and int(idx_part) < len(convs):
+            return convs[int(idx_part)]
+        return None
+    if source == "gemini":
+        file_part, _, idx_part = path_str.partition("#")
+        convs = parse_gemini_takeout(Path(file_part))
         for c in convs:
             if c.ref == ref:
                 return c
@@ -317,7 +328,11 @@ def ingest_file(
 
     resolved_kind = kind
     if resolved_kind == "auto":
-        if target.is_file() and target.suffix.lower() == ".json":
+        gemini_file = find_gemini_takeout_file(target)
+        if gemini_file is not None:
+            resolved_kind = "gemini"
+            target = gemini_file
+        elif target.is_file() and target.suffix.lower() == ".json":
             resolved_kind = "chatgpt"
         else:
             resolved_kind = "text"
@@ -325,6 +340,12 @@ def ingest_file(
     convs: list[RawConversation]
     if resolved_kind == "chatgpt":
         convs = parse_chatgpt_export(target)
+    elif resolved_kind == "gemini":
+        if target.is_dir():
+            found = find_gemini_takeout_file(target)
+            if found is not None:
+                target = found
+        convs = parse_gemini_takeout(target)
     else:
         convs = parse_text_file(target, source=resolved_kind)
 
@@ -335,7 +356,7 @@ def ingest_file(
     queued_ids: list[int] = []
     with store.connect() as conn:
         for idx, conv in enumerate(convs):
-            path_ref = f"{target.resolve()}#{idx}" if resolved_kind == "chatgpt" else conv.ref
+            path_ref = f"{target.resolve()}#{idx}" if resolved_kind in {"chatgpt", "gemini"} else conv.ref
             existing = conn.execute(
                 "SELECT id FROM ingest_log WHERE source = ? AND ref = ?",
                 (conv.source, conv.ref),

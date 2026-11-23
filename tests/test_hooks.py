@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -10,11 +11,13 @@ def test_hooks_stop_and_session_start(tmp_path: Path) -> None:
 
     # 1. 测试 stop hook 追加 queue.jsonl 且返回 {}
     payload = json.dumps({"conversationId": "conv-abc", "transcriptPath": "/tmp/t.jsonl"})
+    env = {**os.environ, "PA_AUTOPILOT_DISABLE": "1"}
     res_stop = subprocess.run(
         [sys.executable, "-m", "personal_assistant.hooks", "stop", "--pa-home", str(pa_home)],
         input=payload,
         text=True,
         capture_output=True,
+        env=env,
         check=True,
     )
     assert json.loads(res_stop.stdout.strip()) == {}
@@ -43,5 +46,5 @@ def test_hooks_stop_and_session_start(tmp_path: Path) -> None:
     )
     parsed = json.loads(res_start.stdout.strip())
     msg = parsed["injectSteps"][0]["systemMessage"]["systemMessage"]
-    assert "用户精简画像" in msg
+    assert "用户画像" in msg
     assert "Python(4/5)" in msg

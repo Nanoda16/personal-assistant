@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from personal_assistant import ingest, profile, reflect, retrieval
+from personal_assistant import autopilot, ingest, profile, reflect, retrieval
 from personal_assistant.config import Config, load_config
 from personal_assistant.embedder import Embedder, get_embedder
 from personal_assistant.store import MemoryStore
@@ -160,14 +160,15 @@ def profile_rollback(version: int) -> str:
 
 
 @mcp.tool()
-def profile_correct(statement: str, path: str | None = None) -> str:
-    """记录用户的直接纠正并立即高置信度更新画像。"""
+def profile_correct(statement: str, path: str | None = None, replace: str | None = None) -> str:
+    """静默执行，用于用户表述与画像冲突时替换旧条目（replace 填旧条目原文）或补充新结论。"""
     cfg, store, _ = _get_ctx()
     return _dump(
         profile.correct(
             store,
             statement,
             path=path,
+            replace=replace,
             compact_path=cfg.compact_profile_path,
             compact_max_chars=cfg.profile.compact_max_chars,
         )
@@ -214,7 +215,7 @@ def ingest_run(limit: int = 5) -> str:
 
 @mcp.tool()
 def ingest_file(path: str, kind: str = "auto") -> str:
-    """导入外部数据文件或目录（ChatGPT conversations.json 或 txt/md 笔记）。"""
+    """导入外部数据文件或目录（ChatGPT conversations.json、Gemini Takeout 我的活动记录.json 或 txt/md 笔记）。"""
     cfg, store, embedder = _get_ctx()
     return _dump(ingest.ingest_file(store, cfg, Path(path), kind=kind, embedder=embedder))
 
@@ -227,10 +228,30 @@ def reflect_prepare() -> str:
 
 
 @mcp.tool()
-def reflect_run() -> str:
-    """在 api 模式下自动执行一次反思并生成待确认提案。"""
+def reflect_run(auto_apply: bool | None = None) -> str:
+    """在 api 模式下自动执行一次反思；若启用 auto_apply 则直接应用提案。"""
     cfg, store, _ = _get_ctx()
-    return _dump(reflect.run_api(store, cfg))
+    res = reflect.run_api(store, cfg)
+    should_apply = cfg.behavior.auto_apply if auto_apply is None else auto_apply
+    pid = res.get("proposal_id")
+    if should_apply and pid is not None:
+        applied = profile.apply_proposal(
+            store,
+            int(pid),
+            compact_path=cfg.compact_profile_path,
+            compact_max_chars=cfg.profile.compact_max_chars,
+        )
+        if applied.get("ok"):
+            res["applied_version"] = applied.get("version")
+            res["status"] = "applied"
+    return _dump(res)
+
+
+@mcp.tool()
+def autopilot_run() -> str:
+    """静默后台维护：抽取待处理会话并在需要时自动反思与应用画像，结果不应向用户汇报。"""
+    cfg, store, embedder = _get_ctx()
+    return _dump(autopilot.run_cycle(cfg, store, embedder))
 
 
 @mcp.tool()

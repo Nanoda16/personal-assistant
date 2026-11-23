@@ -1,8 +1,12 @@
 import json
 from pathlib import Path
 
+from personal_assistant import ingest
+from personal_assistant.config import load_config
 from personal_assistant.sources.antigravity import parse_antigravity_transcript
 from personal_assistant.sources.chatgpt import parse_chatgpt_export
+from personal_assistant.sources.gemini import parse_gemini_takeout
+from personal_assistant.store import MemoryStore
 
 
 def test_antigravity_parser_strip_subagent_and_incremental(tmp_path: Path) -> None:
@@ -100,3 +104,102 @@ def test_chatgpt_export_parser(tmp_path: Path) -> None:
     assert len(convs) == 1
     assert convs[0].title == "Python 学习"
     assert len(convs[0].turns) == 2
+
+
+def test_parse_gemini_takeout_groups_orders_and_filters(tmp_path: Path) -> None:
+    takeout_dir = tmp_path / "Gemini Apps"
+    takeout_dir.mkdir()
+    activity_file = takeout_dir / "我的活动记录.json"
+    # Takeout 默认按时间倒序排列
+    sample = [
+        {
+            "header": "Gemini Apps",
+            "title": "Prompted 帮我加一个暗黑模式",
+            "time": "2026-11-23T10:05:00.000Z",
+            "products": ["Gemini Apps"],
+            "details": [{"url": "https://gemini.google.com/app/convabc123"}],
+            "safeHtmlItem": [{"html": "<p>好的，可以使用 <b>CSS 变量</b> 实现。</p>"}],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Cleared previous feedback",
+            "time": "2026-11-23T10:04:00.000Z",
+            "products": ["Gemini Apps"],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Created Gemini Canvas titled Demo",
+            "time": "2026-11-23T10:03:00.000Z",
+            "products": ["Gemini Apps"],
+            "subtitles": [{"name": "<html>...</html>"}],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Prompted 我正在用 React 19 重构 DocQA 前端",
+            "time": "2026-11-23T10:00:00.000Z",
+            "products": ["Gemini Apps"],
+            "details": [{"url": "https://gemini.google.com/app/convabc123"}],
+            "safeHtmlItem": [{"html": "<p>收到，React 19 很适合这个场景。</p>"}],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Prompted 零散提问没有 URL",
+            "time": "2026-11-20T08:00:00.000Z",
+            "products": ["Gemini Apps"],
+            "safeHtmlItem": [{"html": "<p>已记录。</p>"}],
+        },
+    ]
+    activity_file.write_text(json.dumps(sample, ensure_ascii=False), encoding="utf-8")
+
+    # 目录自动识别
+    convs = parse_gemini_takeout(takeout_dir)
+    assert len(convs) == 2
+    # 按 started_at 升序：2026-11-20 在前，2026-11-23 在后
+    assert convs[0].ref == "gemini:date:2026-11-20"
+    assert convs[0].turns[0].text == "零散提问没有 URL"
+
+    main_conv = convs[1]
+    assert main_conv.source == "gemini"
+    assert main_conv.ref == "gemini:convabc123"
+    assert main_conv.title == "我正在用 React 19 重构 DocQA 前端"
+    assert len(main_conv.turns) == 4
+    # 验证组内已按时间升序排列且剥离了 Prompted 与 HTML 标签
+    assert main_conv.turns[0].role == "user"
+    assert main_conv.turns[0].text == "我正在用 React 19 重构 DocQA 前端"
+    assert main_conv.turns[1].role == "assistant"
+    assert main_conv.turns[1].text == "收到，React 19 很适合这个场景。"
+    assert main_conv.turns[2].text == "帮我加一个暗黑模式"
+    assert main_conv.turns[3].text == "好的，可以使用 CSS 变量 实现。"
+
+
+def test_ingest_file_auto_detects_gemini_takeout(tmp_path: Path) -> None:
+    pa_home = tmp_path / "pa_home"
+    pa_home.mkdir()
+    cfg = load_config(pa_home)
+    store = MemoryStore(cfg.db_path, redact_enabled=True)
+
+    takeout_dir = tmp_path / "Gemini Apps"
+    takeout_dir.mkdir()
+    activity_file = takeout_dir / "我的活动记录.json"
+    sample = [
+        {
+            "header": "Gemini Apps",
+            "title": "Prompted 测试自动识别",
+            "time": "2026-11-23T12:00:00.000Z",
+            "products": ["Gemini Apps"],
+            "details": [{"url": "https://gemini.google.com/app/xyz789"}],
+            "safeHtmlItem": [{"html": "<p>测试成功。</p>"}],
+        }
+    ]
+    activity_file.write_text(json.dumps(sample, ensure_ascii=False), encoding="utf-8")
+
+    res = ingest.ingest_file(store, cfg, takeout_dir, kind="auto")
+    assert res["ok"] is True
+    assert res["queued"] == 1
+
+    nxt = ingest.next_item(store)
+    assert nxt is not None
+    assert nxt["source"] == "gemini"
+    assert nxt["ref"] == "gemini:xyz789"
+    assert "测试自动识别" in nxt["text"]
+    assert "测试成功。" in nxt["text"]

@@ -7,6 +7,11 @@ from personal_assistant.sources.antigravity import (
 )
 from personal_assistant.sources.base import RawConversation, SourceAdapter, Turn
 from personal_assistant.sources.chatgpt import parse_chatgpt_export
+from personal_assistant.sources.gemini import (
+    find_gemini_takeout_file,
+    is_gemini_takeout_json,
+    parse_gemini_takeout,
+)
 from personal_assistant.sources.text import parse_text_file
 
 __all__ = [
@@ -15,7 +20,10 @@ __all__ = [
     "SourceAdapter",
     "Turn",
     "discover_antigravity_transcripts",
+    "find_gemini_takeout_file",
+    "is_gemini_takeout_json",
     "parse_antigravity_transcript",
     "parse_chatgpt_export",
+    "parse_gemini_takeout",
     "parse_text_file",
 ]

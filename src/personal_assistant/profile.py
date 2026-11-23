@@ -339,6 +339,7 @@ def correct(
     statement: str,
     *,
     path: str | None = None,
+    replace: str | None = None,
     compact_path: Path | None = None,
     compact_max_chars: int = 600,
 ) -> dict[str, Any]:
@@ -357,6 +358,15 @@ def correct(
                 "op": "update",
                 "section": section,
                 "value": {"level": 3, "confidence": 0.95, "evidence": text},
+            }
+        ]
+    elif replace and replace.strip():
+        patch = [
+            {
+                "op": "update",
+                "section": section,
+                "match": replace.strip(),
+                "value": {"text": text, "confidence": 0.95},
             }
         ]
     else:

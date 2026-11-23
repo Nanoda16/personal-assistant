@@ -248,7 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ir.add_argument("--limit", type=int, default=5)
     p_if = ing_sub.add_parser("file", help="导入外部文件或目录")
     p_if.add_argument("path")
-    p_if.add_argument("--kind", default="auto", choices=["auto", "chatgpt", "text"])
+    p_if.add_argument("--kind", default="auto", choices=["auto", "chatgpt", "gemini", "text"])
 
     p_search = sub.add_parser("search", help="混合检索长期记忆")
     p_search.add_argument("query")
